@@ -9,10 +9,11 @@ author: Kyle Carter
 
 library
     exposed-modules:
-        Control.Monad.Fresh
-        Control.Monad.Clause
         Logic.Herbrand
+        Control.Monad.Supply
+        Control.Monad.Clause
         Control.Monad.Set
+        Data.Unifiable
         Logic.Interp
         Logic.UnionFind
     build-depends:
