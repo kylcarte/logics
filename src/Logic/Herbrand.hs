@@ -1,3 +1,6 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE LambdaCase #-}
@@ -54,15 +57,6 @@ walkVar s x = subst s x >>= \case
 walk :: Functor f => Subst f x x -> Free f x -> Free f x
 walk s u = u >>= walkVar s
 
-walking :: (Functor f, Foldable f, Monad m) => Subst f x x -> (x -> m ()) -> Free f x -> m ()
-walking s f = mapM_ $ \x -> do
-  f x
-  let u = subst s x
-  walking
-    ( Subst $ maybe (return Nothing) $ fmap Just . subst s )
-    ( maybe (return ()) f
-    ) u
-
 fresh :: Functor f => U f x
 fresh = Pure <$> supply
 
@@ -70,9 +64,7 @@ freshN :: Functor f => Int -> ([Free f x] -> Unify f x a) -> Unify f x a
 freshN n f = replicateM n fresh >>= f
 
 occursCheck :: (Functor f, Foldable f, Eq x) => x -> Free f x -> Unify f x ()
-occursCheck x u = do
-  s <- get
-  walking s (guard . not . (x ==)) u
+occursCheck x = mapM_ $ guard . not . (==) x
 
 extendSubst :: (Functor f, Eq x) => x -> Free f x -> U f x
 extendSubst x u = state $ \s ->
@@ -87,8 +79,8 @@ unify u v = do
   case (u,v) of
     (Pure x,Pure y)
            | x == y -> return u
-    (Pure x,_     ) -> extendSubst x v
-    (_     ,Pure y) -> extendSubst y u
+    (Pure x,_     ) -> occursCheck x v >> extendSubst x v
+    (_     ,Pure y) -> occursCheck y u >> extendSubst y u
     (Free x,Free y) -> Free <$> unifyWith unify x y
 
 (===) :: (Unifiable f, Eq x) => Free f x -> Free f x -> U f x
@@ -100,14 +92,34 @@ a === b = do
 
 data Cons a
   = Nil
+  | Int  Int
   | Cons a a
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
+
+instance Num (Cons a) where
+  fromInteger = Int . fromInteger
+  _ + _ = undefined
+  _ * _ = undefined
+  _ - _ = undefined
+  abs _ = undefined
+  signum _ = undefined
 
 nil :: Free Cons a
 nil = Free Nil
 
+int :: Int -> Free Cons a
+int = Free . Int
+
 cons :: Free Cons a -> Free Cons a -> Free Cons a
 cons a b = Free $ Cons a b
+
+instance Num (f (Free f a)) => Num (Free f a) where
+  fromInteger = Free . fromInteger
+  _ + _ = undefined
+  _ * _ = undefined
+  _ - _ = undefined
+  abs _ = undefined
+  signum _ = undefined
 
 instance Unifiable Cons where
   unifyWith f = \case
@@ -117,11 +129,14 @@ instance Unifiable Cons where
     Nil      -> \case
       Nil      -> pure Nil
       _        -> empty
+    Int x    -> \case
+      Int y    -> Int x <$ guard (x == y)
+      _        -> empty
 
 test0 :: U_ Cons
-test0 = freshN 3 $ \[q,x,y] -> do
-  q === cons x y
-  x === nil
-  y === cons x x
-  return q
+test0 = freshN 4 $ \[q,x,y,z] -> do
+  x === cons 1 y
+  y === cons 2 z
+  z === cons 3 nil
+  q === x
 

@@ -9,6 +9,7 @@ author: Kyle Carter
 
 library
     exposed-modules:
+        Data.Fix
         Logic.Herbrand
         Control.Monad.Supply
         Control.Monad.Clause
@@ -20,6 +21,7 @@ library
         base >=4.8 && <4.9,
         bifunctors -any,
         containers -any,
+        lens -any,
         logict -any,
         free -any,
         transformers -any,
